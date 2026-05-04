@@ -25,6 +25,10 @@ export const roomService = {
     const params = period ? `?period=${period}` : ''
     return api.get(`/rooms/${roomId}${params}`)
   },
+  getMemberCount: async (roomId) => {
+    const res = await api.get(`/rooms/${roomId}`)
+    return res.data?.members?.length || 0
+  },
   updateRoom: (roomId, data) => api.put(`/rooms/update/${roomId}`, data),
   deleteRoom: (roomId) => api.delete(`/rooms/delete/${roomId}`),
   leaveRoom: (roomId) => api.delete('/rooms/leave', { data: { room_id: roomId } }),

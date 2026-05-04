@@ -29,6 +29,7 @@ export default function RoomDetailPage() {
   const [expenseDetails, setExpenseDetails] = useState({})
   const [showAllExpenses, setShowAllExpenses] = useState(false) // 🔧 Mới
   const [showBalances, setShowBalances] = useState(false) // 🔧 Mở/đóng danh sách nợ
+  const [myTotal, setMyTotal] = useState(0) // Chi tiêu cá nhân
   const [newExpense, setNewExpense] = useState({
     amount: '',
     description: '',
@@ -58,13 +59,20 @@ export default function RoomDetailPage() {
         // Handle different response formats
         const roomData = roomRes.data?.room || roomRes.data
         const membersData = roomRes.data?.members || roomData?.members || []
-        const expensesData = roomRes.data?.expenses || [] // ✅ Lấy từ root level
+        const expensesData = roomRes.data?.expenses || []
+        const expensesSummary = roomRes.data?.expenses_summary || {}
         const balancesData = balancesRes.data?.balances || balancesRes.data?.data || balancesRes.data || []
 
         setRoom(roomData)
         setMembers(Array.isArray(membersData) ? membersData : [])
         setExpenses(Array.isArray(expensesData) ? expensesData : [])
         setBalances(Array.isArray(balancesData) ? balancesData : [])
+
+        // Tinh myTotal: t�ng amount ca nhng expense m user l payer
+        const calculatedMyTotal = (Array.isArray(expensesData) ? expensesData : []).reduce((sum, exp) => {
+          return sum + (exp.is_payer ? parseFloat(exp.amount || 0) : 0)
+        }, 0)
+        setMyTotal(calculatedMyTotal)
 
         // Reset form khi fetch xong
         setNewExpense((prev) => ({
@@ -282,7 +290,6 @@ export default function RoomDetailPage() {
   if (loading) return <LoadingSpinner />
   if (!room) return <div className="container py-8">Không tìm thấy phòng</div>
 
-  const totalExpense = expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0)
   const myDebt = balances.filter((b) => b.debtor_id === user?.id)
   const myCredit = balances.filter((b) => b.creditor_id === user?.id)
 
@@ -318,9 +325,9 @@ export default function RoomDetailPage() {
       {/* Stats */}
       <div className="grid md:grid-cols-3 gap-4 mb-8">
         <div className="card">
-          <p className="text-gray-600 text-sm">Tổng chi tiêu</p>
+          <p className="text-gray-600 text-sm">Chi tiêu của bạn</p>
           <p className="text-2xl font-bold text-red-600 mt-2">
-            {totalExpense.toLocaleString()} đ
+            {myTotal.toLocaleString()} đ
           </p>
         </div>
         <div className="card">
@@ -666,12 +673,12 @@ export default function RoomDetailPage() {
                         {(Math.round(balance.amount / 1000) * 1000).toLocaleString()} đ
                       </p>
                     </div>
-                    {balance.debtor_id === user?.id && (
+                    {balance.creditor_id === user?.id && (
                       <button
                         onClick={() => handleSettleBalance(balance.id)}
-                        className="btn-secondary whitespace-nowrap"
+                        className="btn-primary whitespace-nowrap bg-green-600 hover:bg-green-700"
                       >
-                        Đã thanh toán
+                        Đã nhận
                       </button>
                     )}
                   </div>

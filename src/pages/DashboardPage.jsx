@@ -8,6 +8,7 @@ import { Link } from "react-router-dom";
 export default function DashboardPage() {
   const { user } = useAuth();
   const [rooms, setRooms] = useState([]);
+  const [memberCounts, setMemberCounts] = useState({});
   const [stats, setStats] = useState({ totalExpense: 0, roomCount: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -17,14 +18,24 @@ export default function DashboardPage() {
       try {
         if (user?.id) {
           const roomsRes = await roomService.getAllRooms(user.id);
-          setRooms(roomsRes.data || []);
+          const fetchedRooms = roomsRes.data || [];
+          setRooms(fetchedRooms);
 
           // Tính toán thống kê
           let totalExpense = 0;
-          for (const room of roomsRes.data || []) {
+          const counts = {};
+          const countPromises = fetchedRooms.map(async (room) => {
+            try {
+              const count = await roomService.getMemberCount(room.id);
+              counts[room.id] = count;
+            } catch {
+              counts[room.id] = 0;
+            }
+          });
+
+          for (const room of fetchedRooms) {
             try {
               const expensesRes = await expenseService.getExpenses(room.id);
-              // Handle different response formats
               const expenses = expensesRes.data?.expenses || expensesRes.data || [];
               const roomTotal = Array.isArray(expenses)
                 ? expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0)
@@ -38,9 +49,12 @@ export default function DashboardPage() {
             }
           }
 
+          await Promise.all(countPromises);
+          setMemberCounts(counts);
+
           setStats({
             totalExpense,
-            roomCount: roomsRes.data?.length || 0,
+            roomCount: fetchedRooms.length,
           });
         }
       } catch (err) {
@@ -147,7 +161,7 @@ export default function DashboardPage() {
                   Mã phòng: {room.room_code}
                 </p>
                 <p className="text-gray-500 text-sm">
-                  Số thành viên: {room.member_count || 0}
+                  Số thành viên: {memberCounts[room.id] || 0}
                 </p>
               </Link>
             ))}

@@ -2,14 +2,50 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { roomService, expenseService } from "@/services/authService";
 import { Alert, EmptyState, LoadingSpinner } from "@/components/Common";
-import { TrendingDown, Users, DollarSign } from "lucide-react";
+import PersonalNotesCard from "@/components/PersonalNotesCard";
+import { Users, Calendar } from "lucide-react";
 import { Link } from "react-router-dom";
+
+const VI_MONTHS = [
+  "Tháng 1",
+  "Tháng 2",
+  "Tháng 3",
+  "Tháng 4",
+  "Tháng 5",
+  "Tháng 6",
+  "Tháng 7",
+  "Tháng 8",
+  "Tháng 9",
+  "Tháng 10",
+  "Tháng 11",
+  "Tháng 12",
+];
+
+function groupExpensesByMonth(expenses) {
+  const map = {};
+  for (const exp of expenses) {
+    if (!exp.is_payer) continue;
+    const d = new Date(exp.expense_date);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    if (!map[key]) map[key] = 0;
+    map[key] += exp.amount || 0;
+  }
+  return Object.entries(map)
+    .sort(([a], [b]) => b.localeCompare(a))
+    .slice(0, 6)
+    .map(([key, total]) => {
+      const [year, month] = key.split("-");
+      return { label: `${VI_MONTHS[parseInt(month) - 1]} ${year}`, total };
+    });
+}
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const [rooms, setRooms] = useState([]);
   const [memberCounts, setMemberCounts] = useState({});
   const [stats, setStats] = useState({ totalExpense: 0, roomCount: 0 });
+  const [monthlyExpenses, setMonthlyExpenses] = useState([]);
+  const [selectedMonth, setSelectedMonth] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -21,9 +57,9 @@ export default function DashboardPage() {
           const fetchedRooms = roomsRes.data || [];
           setRooms(fetchedRooms);
 
-          // Tính toán thống kê
-          let totalExpense = 0;
           const counts = {};
+          const allExpenses = [];
+
           const countPromises = fetchedRooms.map(async (room) => {
             try {
               const count = await roomService.getMemberCount(room.id);
@@ -36,11 +72,9 @@ export default function DashboardPage() {
           for (const room of fetchedRooms) {
             try {
               const expensesRes = await expenseService.getExpenses(room.id);
-              const expenses = expensesRes.data?.expenses || expensesRes.data || [];
-              const roomTotal = Array.isArray(expenses)
-                ? expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0)
-                : 0;
-              totalExpense += roomTotal;
+              const expenses =
+                expensesRes.data?.expenses || expensesRes.data || [];
+              allExpenses.push(...expenses);
             } catch (err) {
               console.error(
                 `Error fetching expenses for room ${room.id}:`,
@@ -49,13 +83,18 @@ export default function DashboardPage() {
             }
           }
 
+          const grouped = groupExpensesByMonth(allExpenses);
+
           await Promise.all(countPromises);
           setMemberCounts(counts);
 
           setStats({
-            totalExpense,
+            totalExpense: grouped.reduce((s, m) => s + m.total, 0),
             roomCount: fetchedRooms.length,
           });
+
+          setMonthlyExpenses(grouped);
+          setSelectedMonth(grouped[0] || null);
         }
       } catch (err) {
         setError("Không thể tải dữ liệu");
@@ -83,51 +122,74 @@ export default function DashboardPage() {
         <Alert type="error" message={error} onClose={() => setError("")} />
       )}
 
-      {/* Stats Cards */}
-      <div className="grid md:grid-cols-3 gap-6 mb-8">
-        <div className="card">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600 text-sm">Tổng chi tiêu</p>
-              <p className="text-3xl font-bold text-gray-800 mt-2">
-                {stats.totalExpense.toLocaleString()} đ
-              </p>
+      {/* Stats Cards - Balanced Layout */}
+      <div className="grid md:grid-cols-2 gap-4 mb-8">
+        {/* Left Column - Monthly Expense + Room Count (Vertical Stack) */}
+        <div className="flex flex-col gap-4">
+          {/* Monthly Expense Card */}
+          <div className="card bg-gradient-to-br from-red-50 to-pink-50 border-l-4 border-red-400 flex-1">
+            <div className="flex items-start justify-between h-full">
+              <div className="flex-1">
+                <p className="text-gray-600 text-xs font-medium uppercase tracking-wide">
+                  Chi tiêu theo tháng
+                </p>
+                {monthlyExpenses.length === 0 ? (
+                  <p className="text-gray-400 text-sm italic mt-2">
+                    Chưa có chi tiêu
+                  </p>
+                ) : (
+                  <>
+                    <select
+                      className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-red-200 mt-2"
+                      value={selectedMonth?.label || ""}
+                      onChange={(e) => {
+                        const sel = monthlyExpenses.find(
+                          (m) => m.label === e.target.value,
+                        );
+                        setSelectedMonth(sel || null);
+                      }}
+                    >
+                      {monthlyExpenses.map((m) => (
+                        <option key={m.label} value={m.label}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedMonth && (
+                      <p className="text-3xl font-bold text-red-600 mt-3">
+                        {selectedMonth.total.toLocaleString()} đ
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+              <div className="bg-red-100 p-2.5 rounded-full flex-shrink-0 ml-3">
+                <Calendar size={24} className="text-red-600" />
+              </div>
             </div>
-            <div className="bg-red-100 p-3 rounded-full">
-              <TrendingDown size={32} className="text-red-600" />
+          </div>
+
+          {/* Room Count Card */}
+          <div className="card bg-gradient-to-br from-blue-50 to-cyan-50 border-l-4 border-blue-400 flex-1">
+            <div className="flex items-center justify-between h-full">
+              <div>
+                <p className="text-gray-600 text-xs font-medium uppercase tracking-wide">
+                  Số phòng
+                </p>
+                <p className="text-4xl font-bold text-blue-600 mt-3">
+                  {stats.roomCount}
+                </p>
+              </div>
+              <div className="bg-blue-100 p-3 rounded-full flex-shrink-0">
+                <Users size={28} className="text-blue-600" />
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="card">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600 text-sm">Số phòng</p>
-              <p className="text-3xl font-bold text-gray-800 mt-2">
-                {stats.roomCount}
-              </p>
-            </div>
-            <div className="bg-blue-100 p-3 rounded-full">
-              <Users size={32} className="text-blue-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600 text-sm">Trung bình/phòng</p>
-              <p className="text-3xl font-bold text-gray-800 mt-2">
-                {stats.roomCount > 0
-                  ? (stats.totalExpense / stats.roomCount).toLocaleString()
-                  : 0}{" "}
-                đ
-              </p>
-            </div>
-            <div className="bg-green-100 p-3 rounded-full">
-              <DollarSign size={32} className="text-green-600" />
-            </div>
-          </div>
+        {/* Right Column - Personal Notes Card */}
+        <div>
+          <PersonalNotesCard userId={user?.id} />
         </div>
       </div>
 

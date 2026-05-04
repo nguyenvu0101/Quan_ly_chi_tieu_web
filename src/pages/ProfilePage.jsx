@@ -1,12 +1,16 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { userService } from "@/services/authService";
 import { Alert } from "@/components/Common";
 import { User, Mail, Lock } from "lucide-react";
+import AvatarUpload from "@/components/AvatarUpload";
+import BankQRUpload from "@/components/QRCodeDisplay";
 
 export default function ProfilePage() {
   const { user, logout } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
+  const [userAvatar, setUserAvatar] = useState(user?.avatar_url || null);
+  const [userQR, setUserQR] = useState(user?.qr_url || null);
   const [formData, setFormData] = useState({
     fullname: user?.fullname || "",
     username: user?.username || "",
@@ -19,6 +23,58 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  // Load user profile data from API khi component mount
+  useEffect(() => {
+    const loadUserProfile = async () => {
+      try {
+        console.log("🔄 Loading profile for user ID:", user?.id);
+
+        const response = await userService.getProfile();
+
+        console.log("📦 Full response object:", response);
+        console.log("📦 response.data:", response.data);
+        console.log(
+          "   Keys:",
+          response.data ? Object.keys(response.data) : "null",
+        );
+
+        const profileData = response.data;
+
+        console.log("🔍 Detailed profile data:");
+        console.log("   id:", profileData?.id);
+        console.log("   avatar_url:", profileData?.avatar_url);
+        console.log("   qr_url:", profileData?.qr_url);
+        console.log("   avatar_url type:", typeof profileData?.avatar_url);
+        console.log("   qr_url type:", typeof profileData?.qr_url);
+
+        // Update avatar từ API
+        if (profileData?.avatar_url && profileData.avatar_url !== "null") {
+          console.log("✅ Setting avatar from API");
+          setUserAvatar(profileData.avatar_url);
+        } else {
+          console.warn("⚠️ No avatar_url or it's null");
+        }
+
+        // Update QR từ API
+        if (profileData?.qr_url && profileData.qr_url !== "null") {
+          console.log("✅ Setting QR from API");
+          setUserQR(profileData.qr_url);
+        } else {
+          console.warn("⚠️ No qr_url or it's null");
+        }
+      } catch (err) {
+        console.error(
+          "❌ Error loading profile:",
+          err.response?.data || err.message,
+        );
+      }
+    };
+
+    if (user?.id) {
+      loadUserProfile();
+    }
+  }, [user?.id]);
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
@@ -62,6 +118,36 @@ export default function ProfilePage() {
       setError(err.response?.data?.message || "Thay đổi mật khẩu thất bại");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAvatarChange = async (avatarUrl) => {
+    try {
+      setError("");
+      setUserAvatar(avatarUrl);
+      await userService.updateAvatar(avatarUrl);
+      setSuccess("Cập nhật avatar thành công!");
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (err) {
+      setError(err.response?.data?.message || "Cập nhật avatar thất bại");
+      // Reload từ API nếu lỗi
+      const response = await userService.getProfile();
+      setUserAvatar(response.data?.avatar_url || null);
+    }
+  };
+
+  const handleQRChange = async (qrUrl) => {
+    try {
+      setError("");
+      setUserQR(qrUrl);
+      await userService.updateQR(qrUrl);
+      setSuccess("Cập nhật QR ngân hàng thành công!");
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (err) {
+      setError(err.response?.data?.message || "Cập nhật QR thất bại");
+      // Reload từ API nếu lỗi
+      const response = await userService.getProfile();
+      setUserQR(response.data?.qr_url || null);
     }
   };
 
@@ -149,6 +235,26 @@ export default function ProfilePage() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Avatar Upload */}
+      <div className="card mb-8">
+        <h2 className="text-2xl font-bold text-gray-800 mb-6">Avatar</h2>
+        <AvatarUpload
+          userId={user?.id}
+          currentAvatar={userAvatar}
+          onAvatarChange={handleAvatarChange}
+        />
+      </div>
+
+      {/* QR Ngân Hàng */}
+      <div className="card mb-8">
+        <h2 className="text-2xl font-bold text-gray-800 mb-6">QR Ngân hàng</h2>
+        <BankQRUpload
+          userId={user?.id}
+          currentQRUrl={userQR}
+          onQRChange={handleQRChange}
+        />
       </div>
 
       {/* Change Password */}

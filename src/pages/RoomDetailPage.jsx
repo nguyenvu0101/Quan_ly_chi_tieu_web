@@ -1,130 +1,146 @@
-import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { roomService, expenseService, balanceService } from '@/services/authService'
-import { useAuth } from '@/contexts/AuthContext'
-import { Alert, EmptyState, LoadingSpinner } from '@/components/Common'
-import { Trash2, Plus, ChevronDown, X } from 'lucide-react'
+import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
+import {
+  roomService,
+  expenseService,
+  balanceService,
+} from "@/services/authService";
+import { useAuth } from "@/contexts/AuthContext";
+import { Alert, EmptyState, LoadingSpinner } from "@/components/Common";
+import { Trash2, Plus, ChevronDown, X } from "lucide-react";
+import MemberQRViewer from "@/components/MemberQRViewer";
 
 const TIME_PERIODS = [
-  { value: null, label: 'Tất cả' },
-  { value: 'week', label: '1 tuần' },
-  { value: 'month', label: '1 tháng' },
-  { value: '3months', label: '3 tháng' },
-  { value: '6months', label: '6 tháng' },
-  { value: 'year', label: '1 năm' },
-]
+  { value: null, label: "Tất cả" },
+  { value: "week", label: "1 tuần" },
+  { value: "month", label: "1 tháng" },
+  { value: "3months", label: "3 tháng" },
+  { value: "6months", label: "6 tháng" },
+  { value: "year", label: "1 năm" },
+];
 
 export default function RoomDetailPage() {
-  const { roomId } = useParams()
-  const { user } = useAuth()
-  const [room, setRoom] = useState(null)
-  const [expenses, setExpenses] = useState([])
-  const [balances, setBalances] = useState([])
-  const [members, setMembers] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [period, setPeriod] = useState('week') // 🔧 Mặc định 1 tuần
-  const [showAddExpense, setShowAddExpense] = useState(false)
-  const [expandedExpense, setExpandedExpense] = useState(null)
-  const [expenseDetails, setExpenseDetails] = useState({})
-  const [showAllExpenses, setShowAllExpenses] = useState(false) // 🔧 Mới
-  const [showBalances, setShowBalances] = useState(false) // 🔧 Mở/đóng danh sách nợ
-  const [myTotal, setMyTotal] = useState(0) // Chi tiêu cá nhân
+  const { roomId } = useParams();
+  const { user } = useAuth();
+  const [room, setRoom] = useState(null);
+  const [expenses, setExpenses] = useState([]);
+  const [balances, setBalances] = useState([]);
+  const [members, setMembers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [period, setPeriod] = useState("week"); // 🔧 Mặc định 1 tuần
+  const [showAddExpense, setShowAddExpense] = useState(false);
+  const [expandedExpense, setExpandedExpense] = useState(null);
+  const [expenseDetails, setExpenseDetails] = useState({});
+  const [showAllExpenses, setShowAllExpenses] = useState(false); // 🔧 Mới
+  const [showBalances, setShowBalances] = useState(false); // 🔧 Mở/đóng danh sách nợ
+  const [myTotal, setMyTotal] = useState(0); // Chi tiêu cá nhân
   const [newExpense, setNewExpense] = useState({
-    amount: '',
-    description: '',
-    category: 'food',
-    paid_by: '',
+    amount: "",
+    description: "",
+    category: "food",
+    paid_by: "",
     participant_ids: [],
-    split_type: 'equal',
+    split_type: "equal",
     custom_split: {},
     split_amounts: {}, // 🔧 Thêm để lưu số tiền cho từng người
-  })
+  });
 
   // Fetch dữ liệu
   useEffect(() => {
     const fetchData = async () => {
       try {
-        setLoading(true)
-        console.log('🔄 Fetching room details for roomId:', roomId, 'period:', period)
+        setLoading(true);
+        console.log(
+          "🔄 Fetching room details for roomId:",
+          roomId,
+          "period:",
+          period,
+        );
 
         const [roomRes, balancesRes] = await Promise.all([
           roomService.getRoomDetail(roomId, period),
           balanceService.getBalances(roomId),
-        ])
+        ]);
 
-        console.log('📦 Room response:', roomRes.data)
-        console.log('📦 Balances response:', balancesRes.data)
+        console.log("📦 Room response:", roomRes.data);
+        console.log("📦 Balances response:", balancesRes.data);
 
         // Handle different response formats
-        const roomData = roomRes.data?.room || roomRes.data
-        const membersData = roomRes.data?.members || roomData?.members || []
-        const expensesData = roomRes.data?.expenses || []
-        const expensesSummary = roomRes.data?.expenses_summary || {}
-        const balancesData = balancesRes.data?.balances || balancesRes.data?.data || balancesRes.data || []
+        const roomData = roomRes.data?.room || roomRes.data;
+        const membersData = roomRes.data?.members || roomData?.members || [];
+        const expensesData = roomRes.data?.expenses || [];
+        const expensesSummary = roomRes.data?.expenses_summary || {};
+        const balancesData =
+          balancesRes.data?.balances ||
+          balancesRes.data?.data ||
+          balancesRes.data ||
+          [];
 
-        setRoom(roomData)
-        setMembers(Array.isArray(membersData) ? membersData : [])
-        setExpenses(Array.isArray(expensesData) ? expensesData : [])
-        setBalances(Array.isArray(balancesData) ? balancesData : [])
+        setRoom(roomData);
+        setMembers(Array.isArray(membersData) ? membersData : []);
+        setExpenses(Array.isArray(expensesData) ? expensesData : []);
+        setBalances(Array.isArray(balancesData) ? balancesData : []);
 
         // Tinh myTotal: t�ng amount ca nhng expense m user l payer
-        const calculatedMyTotal = (Array.isArray(expensesData) ? expensesData : []).reduce((sum, exp) => {
-          return sum + (exp.is_payer ? parseFloat(exp.amount || 0) : 0)
-        }, 0)
-        setMyTotal(calculatedMyTotal)
+        const calculatedMyTotal = (
+          Array.isArray(expensesData) ? expensesData : []
+        ).reduce((sum, exp) => {
+          return sum + (exp.is_payer ? parseFloat(exp.amount || 0) : 0);
+        }, 0);
+        setMyTotal(calculatedMyTotal);
 
         // Reset form khi fetch xong
         setNewExpense((prev) => ({
           ...prev,
-          paid_by: user?.id?.toString() || '',
+          paid_by: user?.id?.toString() || "",
           participant_ids: [],
           custom_split: {},
-        }))
+        }));
 
-        console.log('✅ Data loaded successfully')
+        console.log("✅ Data loaded successfully");
       } catch (err) {
-        console.error('❌ Error fetching room data:', err)
-        setError('Không thể tải dữ liệu phòng')
+        console.error("❌ Error fetching room data:", err);
+        setError("Không thể tải dữ liệu phòng");
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
+    };
 
-    fetchData()
-  }, [roomId, period])
+    fetchData();
+  }, [roomId, period]);
 
   // Lấy chi tiết chi tiêu khi click
   const handleExpandExpense = async (expenseId) => {
     if (expandedExpense === expenseId) {
-      setExpandedExpense(null)
-      return
+      setExpandedExpense(null);
+      return;
     }
 
     try {
       if (expenseDetails[expenseId]) {
-        setExpandedExpense(expenseId)
-        return
+        setExpandedExpense(expenseId);
+        return;
       }
 
-      const res = await expenseService.getExpenseDetail(expenseId)
-      const detail = res.data?.expense || res.data?.data || {}
-      const participants = res.data?.participants || []
+      const res = await expenseService.getExpenseDetail(expenseId);
+      const detail = res.data?.expense || res.data?.data || {};
+      const participants = res.data?.participants || [];
 
       setExpenseDetails((prev) => ({
         ...prev,
         [expenseId]: { ...detail, participants },
-      }))
-      setExpandedExpense(expenseId)
+      }));
+      setExpandedExpense(expenseId);
     } catch (err) {
-      console.error('❌ Error fetching expense detail:', err)
-      setError('Không thể tải chi tiết chi tiêu')
+      console.error("❌ Error fetching expense detail:", err);
+      setError("Không thể tải chi tiết chi tiêu");
     }
-  }
+  };
 
   // Xử lý thêm chi tiêu
   const handleAddExpense = async (e) => {
-    e.preventDefault()
+    e.preventDefault();
 
     if (
       !newExpense.amount ||
@@ -132,8 +148,8 @@ export default function RoomDetailPage() {
       !newExpense.paid_by ||
       newExpense.participant_ids.length === 0
     ) {
-      setError('Vui lòng nhập đủ thông tin')
-      return
+      setError("Vui lòng nhập đủ thông tin");
+      return;
     }
 
     try {
@@ -145,113 +161,120 @@ export default function RoomDetailPage() {
         paid_by: parseInt(newExpense.paid_by),
         participant_ids: newExpense.participant_ids.map((id) => parseInt(id)),
         split_type: newExpense.split_type,
-      }
+      };
 
       // Xử lý chia theo số tiền cố định
-      if (newExpense.split_type === 'amount') {
-        const totalAmount = parseFloat(newExpense.amount)
-        const customSplit = {}
-        
+      if (newExpense.split_type === "amount") {
+        const totalAmount = parseFloat(newExpense.amount);
+        const customSplit = {};
+
         // Tính phần trăm từ số tiền
         for (const userId of newExpense.participant_ids) {
-          const amount = parseFloat(newExpense.split_amounts[userId]) || 0
-          const percent = (amount / totalAmount) * 100
-          customSplit[userId] = percent
+          const amount = parseFloat(newExpense.split_amounts[userId]) || 0;
+          const percent = (amount / totalAmount) * 100;
+          customSplit[userId] = percent;
         }
 
-        payload.split_type = 'custom'
-        payload.custom_split = customSplit
-      } 
+        payload.split_type = "custom";
+        payload.custom_split = customSplit;
+      }
       // Xử lý chia theo phần trăm
-      else if (newExpense.split_type === 'custom' && Object.keys(newExpense.custom_split).length > 0) {
-        payload.custom_split = newExpense.custom_split
+      else if (
+        newExpense.split_type === "custom" &&
+        Object.keys(newExpense.custom_split).length > 0
+      ) {
+        payload.custom_split = newExpense.custom_split;
       }
 
-      console.log('📤 Adding expense:', payload)
-      await expenseService.addExpense(payload)
+      console.log("📤 Adding expense:", payload);
+      await expenseService.addExpense(payload);
 
       // Reset form
       setNewExpense({
-        amount: '',
-        description: '',
-        category: 'food',
-        paid_by: user?.id?.toString() || '',
+        amount: "",
+        description: "",
+        category: "food",
+        paid_by: user?.id?.toString() || "",
         participant_ids: [],
-        split_type: 'equal',
+        split_type: "equal",
         custom_split: {},
         split_amounts: {},
-      })
-      setShowAddExpense(false)
-      setError('')
+      });
+      setShowAddExpense(false);
+      setError("");
 
       // Reload dữ liệu
       const [roomRes, expensesRes, balancesRes] = await Promise.all([
         roomService.getRoomDetail(roomId, period),
         expenseService.getExpenses(roomId),
         balanceService.getBalances(roomId),
-      ])
+      ]);
 
-      const expensesData = expensesRes.data?.expenses || expensesRes.data || []
-      const balancesData = balancesRes.data?.balances || balancesRes.data?.data || balancesRes.data || []
+      const expensesData = expensesRes.data?.expenses || expensesRes.data || [];
+      const balancesData =
+        balancesRes.data?.balances ||
+        balancesRes.data?.data ||
+        balancesRes.data ||
+        [];
 
-      setExpenses(Array.isArray(expensesData) ? expensesData : [])
-      setBalances(Array.isArray(balancesData) ? balancesData : [])
+      setExpenses(Array.isArray(expensesData) ? expensesData : []);
+      setBalances(Array.isArray(balancesData) ? balancesData : []);
     } catch (err) {
-      console.error('❌ Error adding expense:', err)
-      setError(err.response?.data?.message || 'Không thể thêm chi tiêu')
+      console.error("❌ Error adding expense:", err);
+      setError(err.response?.data?.message || "Không thể thêm chi tiêu");
     }
-  }
+  };
 
   // Xóa chi tiêu
   const handleDeleteExpense = async (expenseId) => {
-    if (!window.confirm('Xác nhận xóa chi tiêu này?')) return
+    if (!window.confirm("Xác nhận xóa chi tiêu này?")) return;
 
     try {
-      await expenseService.deleteExpense(expenseId)
-      setExpenses((prev) => prev.filter((exp) => exp.id !== expenseId))
-      setError('')
+      await expenseService.deleteExpense(expenseId);
+      setExpenses((prev) => prev.filter((exp) => exp.id !== expenseId));
+      setError("");
     } catch (err) {
-      console.error('❌ Error deleting expense:', err)
-      setError('Không thể xóa chi tiêu')
+      console.error("❌ Error deleting expense:", err);
+      setError("Không thể xóa chi tiêu");
     }
-  }
+  };
 
   // Settle balance (thanh toán nợ)
   const handleSettleBalance = async (balanceId) => {
-    if (!window.confirm('Xác nhận đã thanh toán?')) return
+    if (!window.confirm("Xác nhận đã thanh toán?")) return;
 
     try {
-      await balanceService.settleBalance(balanceId)
-      setBalances((prev) => prev.filter((b) => b.id !== balanceId))
-      setError('')
+      await balanceService.settleBalance(balanceId);
+      setBalances((prev) => prev.filter((b) => b.id !== balanceId));
+      setError("");
     } catch (err) {
-      console.error('❌ Error settling balance:', err)
-      setError('Không thể cập nhật thanh toán')
+      console.error("❌ Error settling balance:", err);
+      setError("Không thể cập nhật thanh toán");
     }
-  }
+  };
 
   // Toggle participant
   const toggleParticipant = (userId) => {
-    const userIdStr = userId.toString()
+    const userIdStr = userId.toString();
     setNewExpense((prev) => {
-      const isSelected = prev.participant_ids.includes(userIdStr)
+      const isSelected = prev.participant_ids.includes(userIdStr);
       const newParticipants = isSelected
         ? prev.participant_ids.filter((id) => id !== userIdStr)
-        : [...prev.participant_ids, userIdStr]
+        : [...prev.participant_ids, userIdStr];
 
       // Nếu là custom split, cập nhật custom_split
-      let newCustomSplit = { ...prev.custom_split }
-      if (prev.split_type === 'custom') {
+      let newCustomSplit = { ...prev.custom_split };
+      if (prev.split_type === "custom") {
         if (!isSelected) {
-          newCustomSplit[userIdStr] = 100 / newParticipants.length
+          newCustomSplit[userIdStr] = 100 / newParticipants.length;
           // Redistribute cho những người khác
           Object.keys(newCustomSplit).forEach((id) => {
             if (id !== userIdStr && newParticipants.includes(id)) {
-              newCustomSplit[id] = 100 / newParticipants.length
+              newCustomSplit[id] = 100 / newParticipants.length;
             }
-          })
+          });
         } else {
-          delete newCustomSplit[userIdStr]
+          delete newCustomSplit[userIdStr];
         }
       }
 
@@ -259,39 +282,39 @@ export default function RoomDetailPage() {
         ...prev,
         participant_ids: newParticipants,
         custom_split: newCustomSplit,
-      }
-    })
-  }
+      };
+    });
+  };
 
   // Cập nhật custom split
   const updateCustomSplit = (userId, percent) => {
-    const userIdStr = userId.toString()
+    const userIdStr = userId.toString();
     setNewExpense((prev) => ({
       ...prev,
       custom_split: {
         ...prev.custom_split,
         [userIdStr]: parseFloat(percent) || 0,
       },
-    }))
-  }
+    }));
+  };
 
   // Cập nhật split theo số tiền cố định
   const updateSplitAmount = (userId, amount) => {
-    const userIdStr = userId.toString()
+    const userIdStr = userId.toString();
     setNewExpense((prev) => ({
       ...prev,
       split_amounts: {
         ...prev.split_amounts,
         [userIdStr]: parseFloat(amount) || 0,
       },
-    }))
-  }
+    }));
+  };
 
-  if (loading) return <LoadingSpinner />
-  if (!room) return <div className="container py-8">Không tìm thấy phòng</div>
+  if (loading) return <LoadingSpinner />;
+  if (!room) return <div className="container py-8">Không tìm thấy phòng</div>;
 
-  const myDebt = balances.filter((b) => b.debtor_id === user?.id)
-  const myCredit = balances.filter((b) => b.creditor_id === user?.id)
+  const myDebt = balances.filter((b) => b.debtor_id === user?.id);
+  const myCredit = balances.filter((b) => b.creditor_id === user?.id);
 
   return (
     <div className="container py-8 pb-20">
@@ -333,13 +356,22 @@ export default function RoomDetailPage() {
         <div className="card">
           <p className="text-gray-600 text-sm">Bạn nợ</p>
           <p className="text-2xl font-bold text-orange-600 mt-2">
-            {(Math.round(myDebt.reduce((sum, b) => sum + b.amount, 0) / 1000) * 1000).toLocaleString()} đ
+            {(
+              Math.round(myDebt.reduce((sum, b) => sum + b.amount, 0) / 1000) *
+              1000
+            ).toLocaleString()}{" "}
+            đ
           </p>
         </div>
         <div className="card">
           <p className="text-gray-600 text-sm">Người nợ bạn</p>
           <p className="text-2xl font-bold text-green-600 mt-2">
-            {(Math.round(myCredit.reduce((sum, b) => sum + b.amount, 0) / 1000) * 1000).toLocaleString()} đ
+            {(
+              Math.round(
+                myCredit.reduce((sum, b) => sum + b.amount, 0) / 1000,
+              ) * 1000
+            ).toLocaleString()}{" "}
+            đ
           </p>
         </div>
       </div>
@@ -484,28 +516,32 @@ export default function RoomDetailPage() {
                     <label
                       key={member.user_id}
                       style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '8px 12px',
-                        cursor: 'pointer',
-                        backgroundColor: 'transparent',
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        padding: "8px 12px",
+                        cursor: "pointer",
+                        backgroundColor: "transparent",
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f3f4f6')}
-                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                      onMouseEnter={(e) =>
+                        (e.currentTarget.style.backgroundColor = "#f3f4f6")
+                      }
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.backgroundColor = "transparent")
+                      }
                     >
                       <input
                         type="checkbox"
                         checked={isChecked}
                         onChange={() => toggleParticipant(member.user_id)}
                         style={{
-                          width: '16px',
-                          height: '16px',
-                          cursor: 'pointer',
+                          width: "16px",
+                          height: "16px",
+                          cursor: "pointer",
                           flexShrink: 0,
                         }}
                       />
-                      <span style={{ color: '#374151' }}>
+                      <span style={{ color: "#374151" }}>
                         {member.full_name || member.username}
                       </span>
                     </label>
@@ -578,11 +614,12 @@ export default function RoomDetailPage() {
               )}
 
             {/* Split Amount - Chia theo số tiền */}
-            {newExpense.split_type === 'amount' &&
+            {newExpense.split_type === "amount" &&
               newExpense.participant_ids.length > 0 && (
                 <div className="input-group bg-green-50 p-3 rounded-lg">
                   <p className="text-sm font-medium text-gray-700 mb-2">
-                    Nhập số tiền cho từng người (tổng: {(parseFloat(newExpense.amount) || 0).toLocaleString()} đ):
+                    Nhập số tiền cho từng người (tổng:{" "}
+                    {(parseFloat(newExpense.amount) || 0).toLocaleString()} đ):
                   </p>
                   <div className="space-y-2">
                     {newExpense.participant_ids.map((userId) => {
@@ -670,7 +707,10 @@ export default function RoomDetailPage() {
                         </span>
                       </p>
                       <p className="text-orange-600 font-bold text-xl">
-                        {(Math.round(balance.amount / 1000) * 1000).toLocaleString()} đ
+                        {(
+                          Math.round(balance.amount / 1000) * 1000
+                        ).toLocaleString()}{" "}
+                        đ
                       </p>
                     </div>
                     {balance.creditor_id === user?.id && (
@@ -688,6 +728,9 @@ export default function RoomDetailPage() {
           )}
         </div>
       )}
+
+      {/* Danh sách thành viên với QR */}
+      <MemberQRViewer members={members} roomName={room.room_name} />
 
       {/* Danh sách chi tiêu */}
       <div>

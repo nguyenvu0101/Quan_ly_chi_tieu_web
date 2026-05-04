@@ -2,7 +2,7 @@ import api from './api'
 
 export const authService = {
   register: (data) => api.post('/auth/register', data),
-  login: (email, password) => api.post('/auth/login', { email, password }),
+  login: (username, password) => api.post('/auth/login', { username, password }),
   logout: () => api.post('/auth/logout'),
   forgotPassword: (email) => api.post('/auth/forgot_password', { email }),
   resetPassword: (data) => api.post('/auth/reset_password', data),
@@ -21,7 +21,10 @@ export const roomService = {
   createRoom: (data) => api.post('/rooms/create', data),
   joinRoom: (data) => api.post('/rooms/join', data),
   getAllRooms: (userId) => api.get(`/rooms/user/${userId}`),
-  getRoomDetail: (roomId) => api.get(`/rooms/${roomId}`),
+  getRoomDetail: (roomId, period = null) => {
+    const params = period ? `?period=${period}` : ''
+    return api.get(`/rooms/${roomId}${params}`)
+  },
   updateRoom: (roomId, data) => api.put(`/rooms/update/${roomId}`, data),
   deleteRoom: (roomId) => api.delete(`/rooms/delete/${roomId}`),
   leaveRoom: (roomId) => api.delete('/rooms/leave', { data: { room_id: roomId } }),
@@ -37,7 +40,7 @@ export const expenseService = {
 
 export const balanceService = {
   getBalances: (roomId) => api.get(`/balances/${roomId}`),
-  settleBalance: (data) => api.post('/balances/settle', data),
+  settleBalance: (balanceId) => api.post(`/balances/settle/${balanceId}`),
 }
 
 export const statisticsService = {

@@ -1,4 +1,4 @@
-# P405 Web - Frontend
+# Expense Tracker - Frontend
 
 Ứng dụng web quản lý chi tiêu nhóm được xây dựng với React + Vite.
 
@@ -81,3 +81,7 @@ Frontend tự động kết nối đến backend tại `http://localhost:3003`
 ## 📄 License
 
 MIT
+
+---
+
+**Expense Tracker** - Quản lý chi tiêu nhóm dễ dàng và hiệu quả.

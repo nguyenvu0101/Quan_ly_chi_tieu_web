@@ -17,7 +17,7 @@ export const Header = () => {
     <header className="bg-white shadow-md">
       <div className="container flex justify-between items-center py-4">
         <Link to="/" className="text-2xl font-bold text-blue-600">
-          P405
+          Expense Tracker
         </Link>
 
         {/* Desktop Menu */}

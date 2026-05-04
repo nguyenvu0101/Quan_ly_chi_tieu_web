@@ -2,10 +2,10 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { Alert } from '@/components/Common'
-import { Mail, Lock, LogIn } from 'lucide-react'
+import { User, Lock, LogIn } from 'lucide-react'
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -14,17 +14,20 @@ export default function LoginPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!email || !password) {
-      setError('Vui lòng nhập email và mật khẩu')
+    if (!username || !password) {
+      setError('Vui lòng nhập tên người dùng và mật khẩu')
       return
     }
 
     try {
       setLoading(true)
       setError('')
-      await login(email, password)
+      console.log('🔐 Đang đăng nhập với:', username);
+      await login(username, password)
+      console.log('✅ Đăng nhập thành công');
       navigate('/')
     } catch (err) {
+      console.error('❌ Login page error:', err);
       setError(err.response?.data?.message || 'Đăng nhập thất bại')
     } finally {
       setLoading(false)
@@ -38,24 +41,23 @@ export default function LoginPage() {
           <div className="inline-block bg-blue-600 text-white rounded-lg p-3 mb-4">
             <LogIn size={32} />
           </div>
-          <h1 className="text-3xl font-bold text-gray-800">P405</h1>
-          <p className="text-gray-600 mt-2">Quản lý chi tiêu nhóm</p>
+          <h1 className="text-3xl font-bold text-gray-800">Expense Tracker</h1>
+          <p className="text-gray-600 mt-2">Quản lý chi tiêu nhóm dễ dàng</p>
         </div>
 
         {error && <Alert type="error" message={error} onClose={() => setError('')} />}
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="input-group">
-            <label htmlFor="email" className="flex items-center gap-2">
-              <Mail size={16} />
-              Email
+            <label htmlFor="username" className="flex items-center gap-2">
+              <User size={16} />
+              Tên Đăng Nhập
             </label>
             <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="your@email.com"
+              id="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="nguyenvana"
               disabled={loading}
             />
           </div>

@@ -4,7 +4,7 @@ export const Footer = () => {
       <div className="container">
         <div className="grid md:grid-cols-3 gap-8">
           <div>
-            <h3 className="text-lg font-bold mb-4">P405</h3>
+            <h3 className="text-lg font-bold mb-4">Expense Tracker</h3>
             <p className="text-gray-400">Quản lý chi tiêu nhóm dễ dàng và hiệu quả</p>
           </div>
           <div>
@@ -17,11 +17,11 @@ export const Footer = () => {
           </div>
           <div>
             <h4 className="text-lg font-semibold mb-4">Liên hệ</h4>
-            <p className="text-gray-400">support@p405.com</p>
+            <p className="text-gray-400">support@quanlychitieu.com</p>
           </div>
         </div>
         <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-          <p>&copy; 2026 P405. Tất cả quyền được bảo lưu.</p>
+          <p>&copy; 2026 Expense Tracker. All rights reserved.</p>
         </div>
       </div>
     </footer>

@@ -65,7 +65,7 @@ export default function RegisterPage() {
           <div className="inline-block bg-green-600 text-white rounded-lg p-3 mb-4">
             <UserPlus size={32} />
           </div>
-          <h1 className="text-3xl font-bold text-gray-800">Đăng ký</h1>
+          <h1 className="text-3xl font-bold text-gray-800">Expense Tracker</h1>
           <p className="text-gray-600 mt-2">Tạo tài khoản mới</p>
         </div>
 
@@ -88,7 +88,7 @@ export default function RegisterPage() {
           </div>
 
           <div className="input-group">
-            <label htmlFor="username">Tên người dùng</label>
+            <label htmlFor="username">Tên Đăng Nhập</label>
             <input
               id="username"
               name="username"

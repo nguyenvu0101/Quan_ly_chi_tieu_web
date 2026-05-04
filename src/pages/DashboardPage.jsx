@@ -24,11 +24,11 @@ export default function DashboardPage() {
           for (const room of roomsRes.data || []) {
             try {
               const expensesRes = await expenseService.getExpenses(room.id);
-              const roomTotal =
-                expensesRes.data?.reduce(
-                  (sum, exp) => sum + (exp.amount || 0),
-                  0,
-                ) || 0;
+              // Handle different response formats
+              const expenses = expensesRes.data?.expenses || expensesRes.data || [];
+              const roomTotal = Array.isArray(expenses)
+                ? expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0)
+                : 0;
               totalExpense += roomTotal;
             } catch (err) {
               console.error(

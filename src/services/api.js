@@ -4,7 +4,9 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3003
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json',
+  },
 })
 
 // Interceptor để thêm token vào headers
@@ -29,9 +31,15 @@ api.interceptors.response.use(
       originalRequest._retry = true
       try {
         const refreshToken = localStorage.getItem('refreshToken')
-        const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-          refreshToken,
-        })
+        const response = await axios.post(
+          `${API_BASE_URL}/auth/refresh`,
+          { refreshToken },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          }
+        )
         
         const { accessToken } = response.data
         localStorage.setItem('accessToken', accessToken)

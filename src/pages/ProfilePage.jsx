@@ -112,7 +112,7 @@ export default function ProfilePage() {
             </div>
 
             <div className="input-group">
-              <label htmlFor="username">Tên người dùng</label>
+              <label htmlFor="username">Tên Đăng Nhập</label>
               <input
                 id="username"
                 value={formData.username}

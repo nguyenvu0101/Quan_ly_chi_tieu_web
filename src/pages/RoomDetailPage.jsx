@@ -69,7 +69,9 @@ export default function RoomDetailPage() {
         // Handle different response formats
         const roomData = roomRes.data?.room || roomRes.data;
         const membersData = roomRes.data?.members || roomData?.members || [];
-        const expensesData = roomRes.data?.expenses || [];
+        const expensesData = (roomRes.data?.expenses || []).sort(
+          (a, b) => new Date(b.expense_date) - new Date(a.expense_date),
+        );
         const expensesSummary = roomRes.data?.expenses_summary || {};
         const balancesData =
           balancesRes.data?.balances ||
@@ -167,12 +169,22 @@ export default function RoomDetailPage() {
       if (newExpense.split_type === "amount") {
         const totalAmount = parseFloat(newExpense.amount);
         const customSplit = {};
+        let splitTotal = 0;
 
-        // Tính phần trăm từ số tiền
+        // Tính tổng số tiền được chia và phần trăm
         for (const userId of newExpense.participant_ids) {
           const amount = parseFloat(newExpense.split_amounts[userId]) || 0;
+          splitTotal += amount;
           const percent = (amount / totalAmount) * 100;
           customSplit[userId] = percent;
+        }
+
+        // Kiểm tra tổng số tiền có bằng total không
+        if (Math.abs(splitTotal - totalAmount) > 0.01) {
+          setError(
+            `Lỗi: Tổng chia (${splitTotal.toLocaleString()} đ) không bằng tổng chi tiêu (${totalAmount.toLocaleString()} đ). Vui lòng điều chỉnh!`,
+          );
+          return;
         }
 
         payload.split_type = "custom";
@@ -187,7 +199,9 @@ export default function RoomDetailPage() {
       }
 
       console.log("📤 Adding expense:", payload);
-      await expenseService.addExpense(payload);
+      console.log("✅ Expense added successfully!");
+      setSuccess("✅ Thêm giao dịch thành công!");
+      setTimeout(() => setSuccess(""), 2000);
 
       // Reset form
       setNewExpense({
@@ -203,14 +217,18 @@ export default function RoomDetailPage() {
       setShowAddExpense(false);
       setError("");
 
-      // Reload dữ liệu
+      // 🔄 Reload dữ liệu ngay
       const [roomRes, expensesRes, balancesRes] = await Promise.all([
         roomService.getRoomDetail(roomId, period),
         expenseService.getExpenses(roomId),
         balanceService.getBalances(roomId),
       ]);
 
-      const expensesData = expensesRes.data?.expenses || expensesRes.data || [];
+      const expensesData = (
+        expensesRes.data?.expenses ||
+        expensesRes.data ||
+        []
+      ).sort((a, b) => new Date(b.expense_date) - new Date(a.expense_date));
       const balancesData =
         balancesRes.data?.balances ||
         balancesRes.data?.data ||
@@ -231,8 +249,29 @@ export default function RoomDetailPage() {
 
     try {
       await expenseService.deleteExpense(expenseId);
-      setExpenses((prev) => prev.filter((exp) => exp.id !== expenseId));
+      setSuccess("✅ Xóa giao dịch thành công!");
+      setTimeout(() => setSuccess(""), 2000);
       setError("");
+
+      // 🔄 Reload dữ liệu ngay sau khi xóa
+      const [expensesRes, balancesRes] = await Promise.all([
+        expenseService.getExpenses(roomId),
+        balanceService.getBalances(roomId),
+      ]);
+
+      const expensesData = (
+        expensesRes.data?.expenses ||
+        expensesRes.data ||
+        []
+      ).sort((a, b) => new Date(b.expense_date) - new Date(a.expense_date));
+      const balancesData =
+        balancesRes.data?.balances ||
+        balancesRes.data?.data ||
+        balancesRes.data ||
+        [];
+
+      setExpenses(Array.isArray(expensesData) ? expensesData : []);
+      setBalances(Array.isArray(balancesData) ? balancesData : []);
     } catch (err) {
       console.error("❌ Error deleting expense:", err);
       setError("Không thể xóa chi tiêu");

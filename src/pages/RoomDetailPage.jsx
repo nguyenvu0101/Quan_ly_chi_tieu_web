@@ -19,6 +19,16 @@ const TIME_PERIODS = [
   { value: "year", label: "1 năm" },
 ];
 
+// 🔧 Hàm format ngày theo tiếng Việt (DD/MM/YYYY)
+const formatDateVN = (dateString) => {
+  const date = new Date(dateString);
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+
+  return `${day}/${month}/${year}`;
+};
+
 export default function RoomDetailPage() {
   const { roomId } = useParams();
   const { user } = useAuth();
@@ -28,6 +38,7 @@ export default function RoomDetailPage() {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [period, setPeriod] = useState("week"); // 🔧 Mặc định 1 tuần
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [expandedExpense, setExpandedExpense] = useState(null);
@@ -44,72 +55,85 @@ export default function RoomDetailPage() {
     split_type: "equal",
     custom_split: {},
     split_amounts: {}, // 🔧 Thêm để lưu số tiền cho từng người
+    expense_date: new Date().toISOString().split("T")[0], // 🔧 Ngày chi tiêu (mặc định hôm nay)
   });
 
-  // Fetch dữ liệu
+  // 🔧 Hàm tái sử dụng để fetch dữ liệu
+  const refetchData = async (showLoadingSpinner = true) => {
+    try {
+      if (showLoadingSpinner) setLoading(true);
+      console.log(
+        "🔄 Fetching room details for roomId:",
+        roomId,
+        "period:",
+        period,
+      );
+
+      const [roomRes, balancesRes] = await Promise.all([
+        roomService.getRoomDetail(roomId, period),
+        balanceService.getBalances(roomId),
+      ]);
+
+      console.log("📦 Room response:", roomRes.data);
+      console.log("📦 Balances response:", balancesRes.data);
+
+      // Handle different response formats
+      const roomData = roomRes.data?.room || roomRes.data;
+      const membersData = roomRes.data?.members || roomData?.members || [];
+      const expensesData = (roomRes.data?.expenses || []).sort(
+        (a, b) => new Date(b.expense_date) - new Date(a.expense_date),
+      );
+      const expensesSummary = roomRes.data?.expenses_summary || {};
+      const balancesData =
+        balancesRes.data?.balances ||
+        balancesRes.data?.data ||
+        balancesRes.data ||
+        [];
+
+      setRoom(roomData);
+      setMembers(Array.isArray(membersData) ? membersData : []);
+      setExpenses(Array.isArray(expensesData) ? expensesData : []);
+      setBalances(Array.isArray(balancesData) ? balancesData : []);
+
+      // Tinh myTotal: tổng amount của những expense mà user là payer
+      const calculatedMyTotal = (
+        Array.isArray(expensesData) ? expensesData : []
+      ).reduce((sum, exp) => {
+        return sum + (exp.is_payer ? parseFloat(exp.amount || 0) : 0);
+      }, 0);
+      setMyTotal(calculatedMyTotal);
+
+      // Reset form khi fetch xong
+      setNewExpense((prev) => ({
+        ...prev,
+        paid_by: user?.id?.toString() || "",
+        participant_ids: [],
+        custom_split: {},
+        expense_date: new Date().toISOString().split("T")[0],
+      }));
+
+      console.log("✅ Data loaded successfully");
+    } catch (err) {
+      console.error("❌ Error fetching room data:", err);
+      setError("Không thể tải dữ liệu phòng");
+    } finally {
+      if (showLoadingSpinner) setLoading(false);
+    }
+  };
+
+  // Fetch dữ liệu lần đầu
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        console.log(
-          "🔄 Fetching room details for roomId:",
-          roomId,
-          "period:",
-          period,
-        );
+    refetchData();
+  }, [roomId, period]);
 
-        const [roomRes, balancesRes] = await Promise.all([
-          roomService.getRoomDetail(roomId, period),
-          balanceService.getBalances(roomId),
-        ]);
+  // 🔧 Auto-refresh dữ liệu mỗi 30 giây
+  useEffect(() => {
+    const interval = setInterval(() => {
+      console.log("⏱️ Auto-refreshing data...");
+      refetchData(false); // Không hiển thị loading spinner khi auto-refresh
+    }, 30000); // 30 giây
 
-        console.log("📦 Room response:", roomRes.data);
-        console.log("📦 Balances response:", balancesRes.data);
-
-        // Handle different response formats
-        const roomData = roomRes.data?.room || roomRes.data;
-        const membersData = roomRes.data?.members || roomData?.members || [];
-        const expensesData = (roomRes.data?.expenses || []).sort(
-          (a, b) => new Date(b.expense_date) - new Date(a.expense_date),
-        );
-        const expensesSummary = roomRes.data?.expenses_summary || {};
-        const balancesData =
-          balancesRes.data?.balances ||
-          balancesRes.data?.data ||
-          balancesRes.data ||
-          [];
-
-        setRoom(roomData);
-        setMembers(Array.isArray(membersData) ? membersData : []);
-        setExpenses(Array.isArray(expensesData) ? expensesData : []);
-        setBalances(Array.isArray(balancesData) ? balancesData : []);
-
-        // Tinh myTotal: t�ng amount ca nhng expense m user l payer
-        const calculatedMyTotal = (
-          Array.isArray(expensesData) ? expensesData : []
-        ).reduce((sum, exp) => {
-          return sum + (exp.is_payer ? parseFloat(exp.amount || 0) : 0);
-        }, 0);
-        setMyTotal(calculatedMyTotal);
-
-        // Reset form khi fetch xong
-        setNewExpense((prev) => ({
-          ...prev,
-          paid_by: user?.id?.toString() || "",
-          participant_ids: [],
-          custom_split: {},
-        }));
-
-        console.log("✅ Data loaded successfully");
-      } catch (err) {
-        console.error("❌ Error fetching room data:", err);
-        setError("Không thể tải dữ liệu phòng");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
+    return () => clearInterval(interval); // Cleanup khi component unmount
   }, [roomId, period]);
 
   // Lấy chi tiết chi tiêu khi click
@@ -163,6 +187,7 @@ export default function RoomDetailPage() {
         paid_by: parseInt(newExpense.paid_by),
         participant_ids: newExpense.participant_ids.map((id) => parseInt(id)),
         split_type: newExpense.split_type,
+        expense_date: newExpense.expense_date, // 🔧 Thêm ngày chi tiêu
       };
 
       // Xử lý chia theo số tiền cố định
@@ -199,6 +224,7 @@ export default function RoomDetailPage() {
       }
 
       console.log("📤 Adding expense:", payload);
+      const response = await expenseService.addExpense(payload);
       console.log("✅ Expense added successfully!");
       setSuccess("✅ Thêm giao dịch thành công!");
       setTimeout(() => setSuccess(""), 2000);
@@ -213,30 +239,13 @@ export default function RoomDetailPage() {
         split_type: "equal",
         custom_split: {},
         split_amounts: {},
+        expense_date: new Date().toISOString().split("T")[0],
       });
       setShowAddExpense(false);
       setError("");
 
-      // 🔄 Reload dữ liệu ngay
-      const [roomRes, expensesRes, balancesRes] = await Promise.all([
-        roomService.getRoomDetail(roomId, period),
-        expenseService.getExpenses(roomId),
-        balanceService.getBalances(roomId),
-      ]);
-
-      const expensesData = (
-        expensesRes.data?.expenses ||
-        expensesRes.data ||
-        []
-      ).sort((a, b) => new Date(b.expense_date) - new Date(a.expense_date));
-      const balancesData =
-        balancesRes.data?.balances ||
-        balancesRes.data?.data ||
-        balancesRes.data ||
-        [];
-
-      setExpenses(Array.isArray(expensesData) ? expensesData : []);
-      setBalances(Array.isArray(balancesData) ? balancesData : []);
+      // 🔄 Auto-refresh dữ liệu ngay lập tức
+      await refetchData(false);
     } catch (err) {
       console.error("❌ Error adding expense:", err);
       setError(err.response?.data?.message || "Không thể thêm chi tiêu");
@@ -253,25 +262,8 @@ export default function RoomDetailPage() {
       setTimeout(() => setSuccess(""), 2000);
       setError("");
 
-      // 🔄 Reload dữ liệu ngay sau khi xóa
-      const [expensesRes, balancesRes] = await Promise.all([
-        expenseService.getExpenses(roomId),
-        balanceService.getBalances(roomId),
-      ]);
-
-      const expensesData = (
-        expensesRes.data?.expenses ||
-        expensesRes.data ||
-        []
-      ).sort((a, b) => new Date(b.expense_date) - new Date(a.expense_date));
-      const balancesData =
-        balancesRes.data?.balances ||
-        balancesRes.data?.data ||
-        balancesRes.data ||
-        [];
-
-      setExpenses(Array.isArray(expensesData) ? expensesData : []);
-      setBalances(Array.isArray(balancesData) ? balancesData : []);
+      // 🔄 Auto-refresh dữ liệu ngay lập tức
+      await refetchData(false);
     } catch (err) {
       console.error("❌ Error deleting expense:", err);
       setError("Không thể xóa chi tiêu");
@@ -365,6 +357,14 @@ export default function RoomDetailPage() {
 
       {error && (
         <Alert type="error" message={error} onClose={() => setError("")} />
+      )}
+
+      {success && (
+        <Alert
+          type="success"
+          message={success}
+          onClose={() => setSuccess("")}
+        />
       )}
 
       {/* Filter theo thời gian */}
@@ -509,6 +509,28 @@ export default function RoomDetailPage() {
                 <option value="shopping">🛍️ Mua sắm</option>
                 <option value="other">📦 Khác</option>
               </select>
+            </div>
+
+            {/* Ngày chi tiêu */}
+            <div className="input-group">
+              <label
+                htmlFor="expense_date"
+                className="block text-sm font-medium text-gray-700"
+              >
+                Ngày chi tiêu
+              </label>
+              <input
+                id="expense_date"
+                type="date"
+                value={newExpense.expense_date}
+                onChange={(e) =>
+                  setNewExpense((prev) => ({
+                    ...prev,
+                    expense_date: e.target.value,
+                  }))
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
             </div>
 
             {/* Người thanh toán */}
@@ -811,10 +833,7 @@ export default function RoomDetailPage() {
                               <span className="font-semibold text-blue-600">
                                 {expense.paid_by_name || expense.payer_name}
                               </span>{" "}
-                              thanh toán •{" "}
-                              {new Date(
-                                expense.expense_date,
-                              ).toLocaleDateString("vi-VN")}
+                              thanh toán • {formatDateVN(expense.expense_date)}
                             </p>
                           </div>
                         </div>

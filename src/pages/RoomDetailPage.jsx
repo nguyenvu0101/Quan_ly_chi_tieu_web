@@ -320,11 +320,12 @@ export default function RoomDetailPage() {
   // Cập nhật custom split
   const updateCustomSplit = (userId, percent) => {
     const userIdStr = userId.toString();
+    const value = percent === "" ? 0 : parseFloat(percent) || 0;
     setNewExpense((prev) => ({
       ...prev,
       custom_split: {
         ...prev.custom_split,
-        [userIdStr]: parseFloat(percent) || 0,
+        [userIdStr]: value,
       },
     }));
   };
@@ -332,11 +333,12 @@ export default function RoomDetailPage() {
   // Cập nhật split theo số tiền cố định
   const updateSplitAmount = (userId, amount) => {
     const userIdStr = userId.toString();
+    const value = amount === "" ? 0 : parseFloat(amount) || 0;
     setNewExpense((prev) => ({
       ...prev,
       split_amounts: {
         ...prev.split_amounts,
-        [userIdStr]: parseFloat(amount) || 0,
+        [userIdStr]: value,
       },
     }));
   };
@@ -660,7 +662,8 @@ export default function RoomDetailPage() {
                             min="0"
                             max="100"
                             step="0.1"
-                            value={percent}
+                            value={percent === 0 ? "" : percent}
+                            placeholder="0"
                             onChange={(e) =>
                               updateCustomSplit(userId, e.target.value)
                             }
@@ -697,7 +700,8 @@ export default function RoomDetailPage() {
                             type="number"
                             min="0"
                             step="1000"
-                            value={amount}
+                            value={amount === 0 ? "" : amount}
+                            placeholder="0"
                             onChange={(e) =>
                               updateSplitAmount(userId, e.target.value)
                             }

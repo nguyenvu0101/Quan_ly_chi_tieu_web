@@ -96,11 +96,30 @@ export default function RoomDetailPage() {
       setExpenses(Array.isArray(expensesData) ? expensesData : []);
       setBalances(Array.isArray(balancesData) ? balancesData : []);
 
-      // Tinh myTotal: tổng amount của những expense mà user là payer
+      // 🔧 Tính myTotal: chỉ tính share của user, không phải toàn bộ amount
+      // Ví dụ: trả 300k cho 3 người chia đều → user chỉ chịu 100k (không phải 300k)
       const calculatedMyTotal = (
         Array.isArray(expensesData) ? expensesData : []
       ).reduce((sum, exp) => {
-        return sum + (exp.is_payer ? parseFloat(exp.amount || 0) : 0);
+        const userIdStr = user?.id?.toString();
+        if (!userIdStr) return sum;
+
+        const amount = parseFloat(exp.amount || 0);
+        const userIdNum = parseInt(userIdStr);
+
+        // Kiểm tra user có phải participant không (bao gồm khi là payer)
+        if (exp.participant_ids && exp.participant_ids.includes(userIdNum)) {
+          if (exp.split_type === "equal") {
+            // Chia đều
+            return sum + amount / exp.participant_ids.length;
+          } else if (exp.split_type === "custom" && exp.custom_split) {
+            // Chia tùy chỉnh theo %
+            const percent = exp.custom_split[userIdStr] || 0;
+            return sum + (amount * percent) / 100;
+          }
+        }
+
+        return sum;
       }, 0);
       setMyTotal(calculatedMyTotal);
 

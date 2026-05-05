@@ -40,6 +40,7 @@ export default function RoomDetailPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [period, setPeriod] = useState("week"); // 🔧 Mặc định 1 tuần
+  const [filterDate, setFilterDate] = useState(""); // 🔧 Lọc theo ngày cụ thể
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [expandedExpense, setExpandedExpense] = useState(null);
   const [expenseDetails, setExpenseDetails] = useState({});
@@ -126,15 +127,18 @@ export default function RoomDetailPage() {
     refetchData();
   }, [roomId, period]);
 
-  // 🔧 Auto-refresh dữ liệu mỗi 30 giây
+  // 🔧 Auto-refresh dữ liệu mỗi 30 giây (NHƯNG không refresh khi form đang mở)
   useEffect(() => {
     const interval = setInterval(() => {
-      console.log("⏱️ Auto-refreshing data...");
-      refetchData(false); // Không hiển thị loading spinner khi auto-refresh
+      // Chỉ auto-refresh nếu form không mở
+      if (!showAddExpense && expandedExpense === null) {
+        console.log("⏱️ Auto-refreshing data...");
+        refetchData(false); // Không hiển thị loading spinner khi auto-refresh
+      }
     }, 30000); // 30 giây
 
     return () => clearInterval(interval); // Cleanup khi component unmount
-  }, [roomId, period]);
+  }, [roomId, period, showAddExpense, expandedExpense]);
 
   // Lấy chi tiết chi tiêu khi click
   const handleExpandExpense = async (expenseId) => {
@@ -220,6 +224,19 @@ export default function RoomDetailPage() {
         newExpense.split_type === "custom" &&
         Object.keys(newExpense.custom_split).length > 0
       ) {
+        // 🔧 Kiểm tra tổng phần trăm phải bằng 100%
+        const totalPercent = Object.values(newExpense.custom_split).reduce(
+          (sum, percent) => sum + parseFloat(percent || 0),
+          0,
+        );
+
+        if (Math.abs(totalPercent - 100) > 0.01) {
+          setError(
+            `Lỗi: Tổng phần trăm (${totalPercent.toFixed(2)}%) không bằng 100%. Vui lòng điều chỉnh!`,
+          );
+          return;
+        }
+
         payload.custom_split = newExpense.custom_split;
       }
 
@@ -343,6 +360,11 @@ export default function RoomDetailPage() {
     }));
   };
 
+  // 🔧 Lọc chi tiêu theo ngày
+  const filteredExpenses = filterDate
+    ? expenses.filter((expense) => expense.expense_date === filterDate)
+    : expenses;
+
   if (loading) return <LoadingSpinner />;
   if (!room) return <div className="container py-8">Không tìm thấy phòng</div>;
 
@@ -384,6 +406,24 @@ export default function RoomDetailPage() {
             {tp.label}
           </button>
         ))}
+
+        {/* Filter theo ngày cụ thể */}
+        <div className="flex gap-2">
+          <input
+            type="date"
+            value={filterDate}
+            onChange={(e) => setFilterDate(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          {filterDate && (
+            <button
+              onClick={() => setFilterDate("")}
+              className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-400 transition-all"
+            >
+              Xóa lọc
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Stats */}
@@ -649,9 +689,7 @@ export default function RoomDetailPage() {
                       const member = members.find(
                         (m) => m.user_id.toString() === userId,
                       );
-                      const percent =
-                        newExpense.custom_split[userId] ||
-                        100 / newExpense.participant_ids.length;
+                      const percent = newExpense.custom_split[userId] ?? 0;
                       return (
                         <div key={userId} className="flex items-center gap-2">
                           <span className="text-sm text-gray-700 flex-1 min-w-32">
@@ -674,6 +712,28 @@ export default function RoomDetailPage() {
                       );
                     })}
                   </div>
+
+                  {/* Hiển thị tổng % */}
+                  {(() => {
+                    const totalPercent = Object.values(
+                      newExpense.custom_split,
+                    ).reduce(
+                      (sum, percent) => sum + parseFloat(percent || 0),
+                      0,
+                    );
+                    const isValid = Math.abs(totalPercent - 100) < 0.01;
+                    return (
+                      <div
+                        className={`mt-3 p-2 rounded text-sm font-medium ${
+                          isValid
+                            ? "bg-green-100 text-green-700"
+                            : "bg-red-100 text-red-700"
+                        }`}
+                      >
+                        Tổng: {totalPercent.toFixed(2)}% {isValid ? "✅" : "❌"}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -712,6 +772,27 @@ export default function RoomDetailPage() {
                       );
                     })}
                   </div>
+
+                  {/* Hiển thị tổng tiền chia */}
+                  {(() => {
+                    const totalAmount = parseFloat(newExpense.amount) || 0;
+                    const totalSplit = Object.values(
+                      newExpense.split_amounts,
+                    ).reduce((sum, amount) => sum + parseFloat(amount || 0), 0);
+                    const isValid = Math.abs(totalSplit - totalAmount) < 0.01;
+                    return (
+                      <div
+                        className={`mt-3 p-2 rounded text-sm font-medium ${
+                          isValid
+                            ? "bg-green-100 text-green-700"
+                            : "bg-red-100 text-red-700"
+                        }`}
+                      >
+                        Tổng chia: {totalSplit.toLocaleString()} đ /{" "}
+                        {totalAmount.toLocaleString()} đ {isValid ? "✅" : "❌"}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -801,113 +882,118 @@ export default function RoomDetailPage() {
       <div>
         <h2 className="text-2xl font-bold text-gray-800 mb-4">📝 Chi tiêu</h2>
 
-        {expenses.length === 0 ? (
+        {filteredExpenses.length === 0 ? (
           <EmptyState
-            title="Chưa có chi tiêu"
-            description="Thêm chi tiêu đầu tiên cho phòng"
+            title={
+              filterDate ? "Không có chi tiêu vào ngày này" : "Chưa có chi tiêu"
+            }
+            description={
+              filterDate ? "Chọn ngày khác" : "Thêm chi tiêu đầu tiên cho phòng"
+            }
           />
         ) : (
           <>
             <div className="space-y-3">
-              {(showAllExpenses ? expenses : expenses.slice(0, 5)).map(
-                (expense) => (
-                  <div key={expense.id} className="card">
-                    <div
-                      onClick={() => handleExpandExpense(expense.id)}
-                      className="cursor-pointer flex items-center justify-between"
-                    >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3">
-                          <span className="text-2xl">
-                            {expense.category === "food"
-                              ? "🍽️"
-                              : expense.category === "transport"
-                                ? "🚗"
-                                : expense.category === "entertainment"
-                                  ? "🎬"
-                                  : expense.category === "shopping"
-                                    ? "🛍️"
-                                    : "📦"}
-                          </span>
-                          <div>
-                            <p className="font-semibold text-gray-800">
-                              {expense.description}
-                            </p>
-                            <p className="text-sm text-gray-600">
-                              <span className="font-semibold text-blue-600">
-                                {expense.paid_by_name || expense.payer_name}
-                              </span>{" "}
-                              thanh toán • {formatDateVN(expense.expense_date)}
-                            </p>
-                          </div>
+              {(showAllExpenses
+                ? filteredExpenses
+                : filteredExpenses.slice(0, 5)
+              ).map((expense) => (
+                <div key={expense.id} className="card">
+                  <div
+                    onClick={() => handleExpandExpense(expense.id)}
+                    className="cursor-pointer flex items-center justify-between"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">
+                          {expense.category === "food"
+                            ? "🍽️"
+                            : expense.category === "transport"
+                              ? "🚗"
+                              : expense.category === "entertainment"
+                                ? "🎬"
+                                : expense.category === "shopping"
+                                  ? "🛍️"
+                                  : "📦"}
+                        </span>
+                        <div>
+                          <p className="font-semibold text-gray-800">
+                            {expense.description}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            <span className="font-semibold text-blue-600">
+                              {expense.paid_by_name || expense.payer_name}
+                            </span>{" "}
+                            thanh toán • {formatDateVN(expense.expense_date)}
+                          </p>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <p className="text-xl font-bold text-red-600 min-w-32 text-right">
-                          {expense.amount.toLocaleString()} đ
-                        </p>
-                        <ChevronDown
-                          size={20}
-                          className={`text-gray-400 transition-transform ${
-                            expandedExpense === expense.id ? "rotate-180" : ""
-                          }`}
-                        />
                       </div>
                     </div>
-
-                    {/* Chi tiết mở rộng */}
-                    {expandedExpense === expense.id &&
-                      expenseDetails[expense.id] && (
-                        <div className="mt-4 pt-4 border-t border-gray-200">
-                          <div className="space-y-3">
-                            <div>
-                              <p className="text-sm text-gray-600">
-                                Người tham gia:
-                              </p>
-                              <div className="mt-2 flex flex-wrap gap-2">
-                                {expenseDetails[expense.id].participants?.map(
-                                  (p) => (
-                                    <div
-                                      key={p.user_id}
-                                      className="bg-blue-100 px-3 py-1 rounded-full text-sm"
-                                    >
-                                      <p className="font-medium text-gray-800">
-                                        {p.full_name}
-                                      </p>
-                                      <p className="text-blue-600">
-                                        {p.share_amount.toLocaleString()} đ
-                                      </p>
-                                    </div>
-                                  ),
-                                )}
-                              </div>
-                            </div>
-                            <p className="text-sm text-gray-600">
-                              Cách chia:{" "}
-                              {expense.split_type === "equal"
-                                ? "Chia đều"
-                                : "Chia tùy chỉnh"}
-                            </p>
-                          </div>
-
-                          {/* Nút xóa */}
-                          <div className="mt-4 pt-4 border-t border-gray-200">
-                            <button
-                              onClick={() => handleDeleteExpense(expense.id)}
-                              className="btn-danger flex items-center gap-2 w-full justify-center"
-                            >
-                              <Trash2 size={16} /> Xóa chi tiêu
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                    <div className="flex items-center gap-4">
+                      <p className="text-xl font-bold text-red-600 min-w-32 text-right">
+                        {expense.amount.toLocaleString()} đ
+                      </p>
+                      <ChevronDown
+                        size={20}
+                        className={`text-gray-400 transition-transform ${
+                          expandedExpense === expense.id ? "rotate-180" : ""
+                        }`}
+                      />
+                    </div>
                   </div>
-                ),
-              )}
+
+                  {/* Chi tiết mở rộng */}
+                  {expandedExpense === expense.id &&
+                    expenseDetails[expense.id] && (
+                      <div className="mt-4 pt-4 border-t border-gray-200">
+                        <div className="space-y-3">
+                          <div>
+                            <p className="text-sm text-gray-600">
+                              Người tham gia:
+                            </p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {expenseDetails[expense.id].participants?.map(
+                                (p) => (
+                                  <div
+                                    key={p.user_id}
+                                    className="bg-blue-100 px-3 py-1 rounded-full text-sm"
+                                  >
+                                    <p className="font-medium text-gray-800">
+                                      {p.full_name}
+                                    </p>
+                                    <p className="text-blue-600">
+                                      {p.share_amount.toLocaleString()} đ
+                                    </p>
+                                  </div>
+                                ),
+                              )}
+                            </div>
+                          </div>
+                          <p className="text-sm text-gray-600">
+                            Cách chia:{" "}
+                            {expense.split_type === "equal"
+                              ? "Chia đều"
+                              : "Chia tùy chỉnh"}
+                          </p>
+                        </div>
+
+                        {/* Nút xóa */}
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                          <button
+                            onClick={() => handleDeleteExpense(expense.id)}
+                            className="btn-danger flex items-center gap-2 w-full justify-center"
+                          >
+                            <Trash2 size={16} /> Xóa chi tiêu
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                </div>
+              ))}
             </div>
 
             {/* Nút xem tất cả / Thu gọn */}
-            {expenses.length > 5 && (
+            {filteredExpenses.length > 5 && (
               <button
                 onClick={() => setShowAllExpenses(!showAllExpenses)}
                 className="btn-secondary w-full mt-4"

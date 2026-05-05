@@ -24,11 +24,11 @@ const VI_MONTHS = [
 function groupExpensesByMonth(expenses) {
   const map = {};
   for (const exp of expenses) {
-    if (!exp.is_payer) continue;
     const d = new Date(exp.expense_date);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     if (!map[key]) map[key] = 0;
-    map[key] += exp.amount || 0;
+    // Dùng share_amount thay vì amount để phản ánh đúng chi tiêu cá nhân
+    map[key] += exp.share_amount || 0;
   }
   return Object.entries(map)
     .sort(([a], [b]) => b.localeCompare(a))
@@ -89,7 +89,7 @@ export default function DashboardPage() {
           setMemberCounts(counts);
 
           setStats({
-            totalExpense: grouped.reduce((s, m) => s + m.total, 0),
+            totalExpense: grouped[0]?.total || 0,
             roomCount: fetchedRooms.length,
           });
 

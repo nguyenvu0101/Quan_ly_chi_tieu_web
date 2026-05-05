@@ -95,42 +95,31 @@ export default function RoomDetailPage() {
       setMembers(Array.isArray(membersData) ? membersData : []);
       setExpenses(Array.isArray(expensesData) ? expensesData : []);
       setBalances(Array.isArray(balancesData) ? balancesData : []);
+      setMyTotal(expensesSummary.my_total || 0);
 
-      // 🔧 Tính myTotal: chỉ tính share của user, không phải toàn bộ amount
-      // Ví dụ: trả 300k cho 3 người chia đều → user chỉ chịu 100k (không phải 300k)
-      const calculatedMyTotal = (
-        Array.isArray(expensesData) ? expensesData : []
-      ).reduce((sum, exp) => {
-        const userIdStr = user?.id?.toString();
-        if (!userIdStr) return sum;
+      // 🔧 Fetch expense details để lấy participants
+      console.log("🔄 Fetching expense details for all expenses...");
+      const detailsMap = {};
+      for (const exp of expensesData) {
+        try {
+          const detailRes = await expenseService.getExpenseDetail(exp.id);
+          const detail = detailRes.data?.expense || detailRes.data?.data || {};
+          const participants = detailRes.data?.participants || [];
 
-        const amount = parseFloat(exp.amount || 0);
-        const userIdNum = parseInt(userIdStr);
-
-        // Kiểm tra user có phải participant không (bao gồm khi là payer)
-        if (exp.participant_ids && exp.participant_ids.includes(userIdNum)) {
-          if (exp.split_type === "equal") {
-            // Chia đều
-            return sum + amount / exp.participant_ids.length;
-          } else if (exp.split_type === "custom" && exp.custom_split) {
-            // Chia tùy chỉnh theo %
-            const percent = exp.custom_split[userIdStr] || 0;
-            return sum + (amount * percent) / 100;
-          }
+          detailsMap[exp.id] = {
+            ...detail,
+            participants,
+            participant_ids: participants.map((p) => p.user_id),
+          };
+          console.log(
+            `✅ Fetched detail for expense ${exp.id}:`,
+            detailsMap[exp.id],
+          );
+        } catch (err) {
+          console.error(`❌ Error fetching expense detail ${exp.id}:`, err);
         }
-
-        return sum;
-      }, 0);
-      setMyTotal(calculatedMyTotal);
-
-      // Reset form khi fetch xong
-      setNewExpense((prev) => ({
-        ...prev,
-        paid_by: user?.id?.toString() || "",
-        participant_ids: [],
-        custom_split: {},
-        expense_date: new Date().toISOString().split("T")[0],
-      }));
+      }
+      setExpenseDetails(detailsMap);
 
       console.log("✅ Data loaded successfully");
     } catch (err) {
@@ -379,10 +368,29 @@ export default function RoomDetailPage() {
     }));
   };
 
-  // 🔧 Lọc chi tiêu theo ngày
+  // Lọc chi tiêu theo ngày
   const filteredExpenses = filterDate
     ? expenses.filter((expense) => expense.expense_date === filterDate)
     : expenses;
+
+  // Khi có filterDate thì tính lại myTotal từ expenseDetails
+  const calculatedMyTotal = filterDate
+    ? filteredExpenses.reduce((sum, exp) => {
+        const detail = expenseDetails[exp.id];
+        const participants = detail?.participants || [];
+        const myPart = participants.find(
+          (p) => p.user_id === user?.id,
+        );
+        return sum + (myPart ? parseFloat(myPart.share_amount || 0) : 0);
+      }, 0)
+    : myTotal; // Dùng myTotal từ API khi không filter theo ngày
+
+  // Cập nhật myTotal khi expenses hoặc filterDate thay đổi
+  useEffect(() => {
+    if (filterDate) {
+      setMyTotal(calculatedMyTotal);
+    }
+  }, [calculatedMyTotal, filterDate]);
 
   if (loading) return <LoadingSpinner />;
   if (!room) return <div className="container py-8">Không tìm thấy phòng</div>;

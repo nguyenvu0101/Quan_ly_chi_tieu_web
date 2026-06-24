@@ -62,9 +62,9 @@ export const roomService = {
     return res.data?.members?.length || 0;
   },
   updateRoom: (roomId, data) => api.put(`/rooms/update/${roomId}`, data),
-  deleteRoom: (roomId) => api.delete(`/rooms/delete/${roomId}`),
-  leaveRoom: (roomId) =>
-    api.delete("/rooms/leave", { data: { room_id: roomId } }),
+  deleteRoom: (roomId, userId) => api.delete(`/rooms/delete/${userId}?roomId=${roomId}`),
+  leaveRoom: (roomId, userId) =>
+    api.delete("/rooms/leave", { data: { roomId, userId } }),
   removeUser: (data) => api.delete("/rooms/removeUser", { data }),
 };
 

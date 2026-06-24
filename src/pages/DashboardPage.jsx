@@ -157,7 +157,7 @@ export default function DashboardPage() {
                     </select>
                     {selectedMonth && (
                       <p className="text-3xl font-bold text-red-600 mt-3">
-                        {selectedMonth.total.toLocaleString()} đ
+                        {Math.round(selectedMonth.total).toLocaleString()} đ
                       </p>
                     )}
                   </>

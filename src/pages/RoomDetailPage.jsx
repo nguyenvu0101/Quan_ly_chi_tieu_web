@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   roomService,
   expenseService,
@@ -31,6 +31,7 @@ const formatDateVN = (dateString) => {
 
 export default function RoomDetailPage() {
   const { roomId } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [room, setRoom] = useState(null);
   const [expenses, setExpenses] = useState([]);
@@ -39,7 +40,14 @@ export default function RoomDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [period, setPeriod] = useState("week"); // 🔧 Mặc định 1 tuần
+  const [period, setPeriod] = useState("month"); // 🔧 Mặc định 1 tháng
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    type: "",
+    title: "",
+    message: "",
+    onConfirm: null,
+  });
   const [filterDate, setFilterDate] = useState(""); // 🔧 Lọc theo ngày cụ thể
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [expandedExpense, setExpandedExpense] = useState(null);
@@ -97,27 +105,14 @@ export default function RoomDetailPage() {
       setBalances(Array.isArray(balancesData) ? balancesData : []);
       setMyTotal(expensesSummary.my_total || 0);
 
-      // 🔧 Fetch expense details để lấy participants
-      console.log("🔄 Fetching expense details for all expenses...");
+      // 🔧 Lấy details trực tiếp từ expensesData đã eager load phía backend
       const detailsMap = {};
       for (const exp of expensesData) {
-        try {
-          const detailRes = await expenseService.getExpenseDetail(exp.id);
-          const detail = detailRes.data?.expense || detailRes.data?.data || {};
-          const participants = detailRes.data?.participants || [];
-
-          detailsMap[exp.id] = {
-            ...detail,
-            participants,
-            participant_ids: participants.map((p) => p.user_id),
-          };
-          console.log(
-            `✅ Fetched detail for expense ${exp.id}:`,
-            detailsMap[exp.id],
-          );
-        } catch (err) {
-          console.error(`❌ Error fetching expense detail ${exp.id}:`, err);
-        }
+        detailsMap[exp.id] = {
+          ...exp,
+          participants: exp.participants || [],
+          participant_ids: exp.participant_ids || (exp.participants || []).map((p) => p.user_id),
+        };
       }
       setExpenseDetails(detailsMap);
 
@@ -149,30 +144,11 @@ export default function RoomDetailPage() {
   }, [roomId, period, showAddExpense, expandedExpense]);
 
   // Lấy chi tiết chi tiêu khi click
-  const handleExpandExpense = async (expenseId) => {
+  const handleExpandExpense = (expenseId) => {
     if (expandedExpense === expenseId) {
       setExpandedExpense(null);
-      return;
-    }
-
-    try {
-      if (expenseDetails[expenseId]) {
-        setExpandedExpense(expenseId);
-        return;
-      }
-
-      const res = await expenseService.getExpenseDetail(expenseId);
-      const detail = res.data?.expense || res.data?.data || {};
-      const participants = res.data?.participants || [];
-
-      setExpenseDetails((prev) => ({
-        ...prev,
-        [expenseId]: { ...detail, participants },
-      }));
+    } else {
       setExpandedExpense(expenseId);
-    } catch (err) {
-      console.error("❌ Error fetching expense detail:", err);
-      setError("Không thể tải chi tiết chi tiêu");
     }
   };
 
@@ -219,7 +195,7 @@ export default function RoomDetailPage() {
         // Kiểm tra tổng số tiền có bằng total không
         if (Math.abs(splitTotal - totalAmount) > 0.01) {
           setError(
-            `Lỗi: Tổng chia (${splitTotal.toLocaleString()} đ) không bằng tổng chi tiêu (${totalAmount.toLocaleString()} đ). Vui lòng điều chỉnh!`,
+            `Lỗi: Tổng chia (${Math.round(splitTotal).toLocaleString()} đ) không bằng tổng chi tiêu (${Math.round(totalAmount).toLocaleString()} đ). Vui lòng điều chỉnh!`,
           );
           return;
         }
@@ -309,6 +285,38 @@ export default function RoomDetailPage() {
     }
   };
 
+  // Thực hiện rời phòng
+  const executeLeaveRoom = async () => {
+    try {
+      setLoading(true);
+      await roomService.leaveRoom(roomId, user?.id);
+      setSuccess("🚪 Rời phòng thành công!");
+      setTimeout(() => {
+        navigate("/");
+      }, 1500);
+    } catch (err) {
+      console.error("❌ Error leaving room:", err);
+      setError(err.response?.data?.message || "Không thể rời phòng");
+      setLoading(false);
+    }
+  };
+
+  // Thực hiện xóa phòng
+  const executeDeleteRoom = async () => {
+    try {
+      setLoading(true);
+      await roomService.deleteRoom(roomId, user?.id);
+      setSuccess("🗑️ Xóa phòng thành công!");
+      setTimeout(() => {
+        navigate("/");
+      }, 1500);
+    } catch (err) {
+      console.error("❌ Error deleting room:", err);
+      setError(err.response?.data?.message || "Không thể xóa phòng");
+      setLoading(false);
+    }
+  };
+
   // Toggle participant
   const toggleParticipant = (userId) => {
     const userIdStr = userId.toString();
@@ -378,9 +386,7 @@ export default function RoomDetailPage() {
     ? filteredExpenses.reduce((sum, exp) => {
         const detail = expenseDetails[exp.id];
         const participants = detail?.participants || [];
-        const myPart = participants.find(
-          (p) => p.user_id === user?.id,
-        );
+        const myPart = participants.find((p) => p.user_id === user?.id);
         return sum + (myPart ? parseFloat(myPart.share_amount || 0) : 0);
       }, 0)
     : myTotal; // Dùng myTotal từ API khi không filter theo ngày
@@ -401,9 +407,46 @@ export default function RoomDetailPage() {
   return (
     <div className="container py-8 pb-20">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold text-gray-800">{room.room_name}</h1>
-        <p className="text-gray-600">Mã phòng: {room.room_code}</p>
+      <div className="mb-8 flex justify-between items-start flex-wrap gap-4">
+        <div>
+          <h1 className="text-4xl font-bold text-gray-800">{room.room_name}</h1>
+          <p className="text-gray-600">Mã phòng: {room.room_code}</p>
+        </div>
+        <div>
+          {room.created_by === user?.id ? (
+            <button
+              onClick={() =>
+                setConfirmModal({
+                  isOpen: true,
+                  type: "delete",
+                  title: "⚠️ Xác nhận xóa phòng",
+                  message:
+                    "CẢNH BÁO: Hành động này sẽ xóa vĩnh viễn phòng này và toàn bộ lịch sử chi tiêu, nợ nần của tất cả thành viên. Bạn không thể hoàn tác hành động này!",
+                  onConfirm: executeDeleteRoom,
+                })
+              }
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-all text-sm shadow-sm"
+            >
+              🗑️ Xóa phòng
+            </button>
+          ) : (
+            <button
+              onClick={() =>
+                setConfirmModal({
+                  isOpen: true,
+                  type: "leave",
+                  title: "🚪 Xác nhận rời phòng",
+                  message:
+                    "Bạn có chắc chắn muốn rời khỏi phòng này không? Các thống kê chi tiêu và số nợ của bạn trong phòng này sẽ bị xóa khỏi lịch sử của bạn.",
+                  onConfirm: executeLeaveRoom,
+                })
+              }
+              className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium transition-all text-sm shadow-sm"
+            >
+              🚪 Rời phòng
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -458,7 +501,7 @@ export default function RoomDetailPage() {
         <div className="card">
           <p className="text-gray-600 text-sm">Chi tiêu của bạn</p>
           <p className="text-2xl font-bold text-red-600 mt-2">
-            {myTotal.toLocaleString()} đ
+            {Math.round(myTotal).toLocaleString()} đ
           </p>
         </div>
         <div className="card">
@@ -770,7 +813,7 @@ export default function RoomDetailPage() {
                 <div className="input-group bg-green-50 p-3 rounded-lg">
                   <p className="text-sm font-medium text-gray-700 mb-2">
                     Nhập số tiền cho từng người (tổng:{" "}
-                    {(parseFloat(newExpense.amount) || 0).toLocaleString()} đ):
+                    {Math.round(parseFloat(newExpense.amount) || 0).toLocaleString()} đ):
                   </p>
                   <div className="space-y-2">
                     {newExpense.participant_ids.map((userId) => {
@@ -815,8 +858,8 @@ export default function RoomDetailPage() {
                             : "bg-red-100 text-red-700"
                         }`}
                       >
-                        Tổng chia: {totalSplit.toLocaleString()} đ /{" "}
-                        {totalAmount.toLocaleString()} đ {isValid ? "✅" : "❌"}
+                        Tổng chia: {Math.round(totalSplit).toLocaleString()} đ /{" "}
+                        {Math.round(totalAmount).toLocaleString()} đ {isValid ? "✅" : "❌"}
                       </div>
                     );
                   })()}
@@ -958,7 +1001,7 @@ export default function RoomDetailPage() {
                     </div>
                     <div className="flex items-center gap-4">
                       <p className="text-xl font-bold text-red-600 min-w-32 text-right">
-                        {expense.amount.toLocaleString()} đ
+                        {Math.round(expense.amount).toLocaleString()} đ
                       </p>
                       <ChevronDown
                         size={20}
@@ -989,7 +1032,7 @@ export default function RoomDetailPage() {
                                       {p.full_name}
                                     </p>
                                     <p className="text-blue-600">
-                                      {p.share_amount.toLocaleString()} đ
+                                      {Math.round(p.share_amount).toLocaleString()} đ
                                     </p>
                                   </div>
                                 ),
@@ -1031,6 +1074,48 @@ export default function RoomDetailPage() {
           </>
         )}
       </div>
+
+      {/* Custom Confirmation Modal */}
+      {confirmModal.isOpen && (
+        <div 
+          className="fixed inset-0 bg-black/55 flex items-center justify-center z-55 p-4"
+          onClick={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+          style={{ backgroundColor: "rgba(0, 0, 0, 0.55)", zIndex: 9999 }}
+        >
+          <div 
+            className="bg-white rounded-xl max-w-sm w-full p-6 shadow-2xl transform transition-all scale-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-xl font-bold text-gray-800 mb-2">
+              {confirmModal.title}
+            </h3>
+            <p className="text-gray-600 text-sm mb-6 leading-relaxed">
+              {confirmModal.message}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+                className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg font-medium transition-all text-sm"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={() => {
+                  confirmModal.onConfirm();
+                  setConfirmModal({ ...confirmModal, isOpen: false });
+                }}
+                className={`flex-1 px-4 py-2.5 text-white rounded-lg font-medium transition-all text-sm ${
+                  confirmModal.type === "delete"
+                    ? "bg-red-600 hover:bg-red-700"
+                    : "bg-orange-600 hover:bg-orange-700"
+                }`}
+              >
+                Xác nhận
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

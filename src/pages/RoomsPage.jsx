@@ -169,7 +169,7 @@ export default function RoomsPage() {
                   }
                   placeholder="ABC123"
                   disabled={loading}
-                  maxLength="6"
+                  maxLength="7"
                 />
               </div>
 

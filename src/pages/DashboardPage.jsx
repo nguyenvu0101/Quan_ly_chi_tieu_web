@@ -54,7 +54,9 @@ export default function DashboardPage() {
       try {
         if (user?.id) {
           const roomsRes = await roomService.getAllRooms(user.id);
-          const fetchedRooms = roomsRes.data || [];
+          const fetchedRooms = Array.isArray(roomsRes.data)
+            ? roomsRes.data
+            : (roomsRes.data?.rooms || []);
           setRooms(fetchedRooms);
 
           const counts = {};
@@ -197,7 +199,7 @@ export default function DashboardPage() {
       <div className="mb-8">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-gray-800">Phòng của bạn</h2>
-          <Link to="/rooms/create" className="btn-primary">
+          <Link to="/rooms" className="btn-primary">
             + Tạo phòng mới
           </Link>
         </div>

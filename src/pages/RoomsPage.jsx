@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { roomService } from '@/services/authService'
 import { Alert } from '@/components/Common'
+import { useAuth } from '@/contexts/AuthContext'
 import { Users, Code } from 'lucide-react'
 
 export default function RoomsPage() {
@@ -11,6 +12,16 @@ export default function RoomsPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
+  const { user } = useAuth()
+
+  const generateRoomCode = (length = 7) => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+    let result = ''
+    for (let i = 0; i < length; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length))
+    }
+    return result
+  }
 
   const handleCreateRoom = async (e) => {
     e.preventDefault()
@@ -22,9 +33,15 @@ export default function RoomsPage() {
     try {
       setLoading(true)
       setError('')
-      const res = await roomService.createRoom(createForm)
+      const payload = {
+        roomname: createForm.room_name.trim(),
+        roomcode: generateRoomCode(),
+        description: '',
+        creator_id: user?.id,
+      }
+      const res = await roomService.createRoom(payload)
       alert('Tạo phòng thành công!')
-      navigate(`/rooms/${res.data.id}`)
+      navigate(`/rooms/${res.data.roomId}`)
     } catch (err) {
       setError(err.response?.data?.message || 'Không thể tạo phòng')
     } finally {
@@ -42,9 +59,13 @@ export default function RoomsPage() {
     try {
       setLoading(true)
       setError('')
-      const res = await roomService.joinRoom(joinForm)
+      const payload = {
+        roomCode: joinForm.room_code.trim().toUpperCase(),
+        userId: user?.id,
+      }
+      const res = await roomService.joinRoom(payload)
       alert('Tham gia phòng thành công!')
-      navigate(`/rooms/${res.data.id}`)
+      navigate(`/rooms/${res.data.roomId}`)
     } catch (err) {
       setError(err.response?.data?.message || 'Không thể tham gia phòng')
     } finally {
